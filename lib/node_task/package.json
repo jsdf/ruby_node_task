@@ -1,0 +1,15 @@
+{
+  "name": "ruby_node_task",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "James Friend <james@jsdf.co> (http://jsdf.co/)",
+  "license": "ISC",
+  "dependencies": {
+    "daemon": "^1.1.0",
+    "ndjson": "^1.3.0"
+  }
+}
