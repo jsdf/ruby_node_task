@@ -41,7 +41,7 @@ class NodeTask
     end
 
     def node_command
-      @node_command || ENV["NODE_COMMAND"] || 'node'
+      @node_command || ENV["NODE_COMMAND"] || 'node --debug'
     end
 
     def daemon_start_script
@@ -76,7 +76,7 @@ class NodeTask
           end
         end
       rescue DaemonController::StartTimeout, DaemonController::StartError => e
-        logger.error e
+        logger.error e.message
         logger.error "retrying attempt #{attempt+1}"
         if attempt < START_MAX_RETRIES
           socket = ensure_connection(attempt+1)
@@ -107,7 +107,7 @@ class NodeTask
           result = parse_response(socket)
         end
       rescue Timeout::Error, Exception => e
-        logger.error e
+        logger.error e.message
       ensure
         # disconnect after receiving response
         socket.close
@@ -175,15 +175,24 @@ class NodeTask
       controller = DaemonController.new(
         identifier: daemon_identifier,
         start_command: "#{node_command} #{daemon_start_script}",
-        ping_command: [:unix, socket_path],
+        # ping_command: [:unix, socket_path],
+        ping_command: Proc.new{
+          begin
+            _make_connection
+          rescue Errno::ENOENT => e 
+            # daemon_controller doesn't understand ENOENT
+            raise Errno::ECONNREFUSED, e.message
+          end
+        },
         pid_file: File.join(working_dir, "#{daemon_identifier}.pid"),
-        log_file: File.join(working_dir, "#{daemon_identifier}.log"),
+        log_file: File.join(working_dir, "#{daemon_identifier}-error.log"),
         env: {
           "NODE_SOCK_PATH" => socket_path,
           "NODE_TASK_CWD" => working_dir,
           "NODE_TASK_DAEMON_ID" => daemon_identifier,
         },
         start_timeout: 5,
+        daemonize_for_me: true,
       )
 
       at_exit { release }
