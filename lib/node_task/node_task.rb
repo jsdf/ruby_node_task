@@ -8,6 +8,9 @@ class NodeTask
   RESPONSE_TIMEOUT = 20
   START_MAX_RETRIES = 1
 
+  class Error < StandardError
+  end
+
   class << self
     attr_writer :node_command
     attr_writer :logger
@@ -71,7 +74,7 @@ class NodeTask
     end
 
     # really try to successfully connect, starting the daemon if required
-    def ensure_connection()
+    def ensure_connection
       attempt = 0
       begin
         server # make sure daemon is running
@@ -157,6 +160,7 @@ class NodeTask
     def release
       begin
         # this doesn't really work as intended right now
+        # as no connections are maintained when tasks aren't running
         return if clients_active > 0
       rescue Errno::ENOENT => e
         # socket file probably doesn't exist
@@ -245,6 +249,12 @@ class NodeTask
     }
 
     response = self.class.request(socket, message)
-    response[:result] if response
+    if response
+      if response[:error]
+        raise NodeTask::Error, response[:error]
+      else
+        response[:result]
+      end
+    end
   end
 end
