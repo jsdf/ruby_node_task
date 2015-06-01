@@ -5,7 +5,7 @@ require 'timeout'
 require 'logger'
 
 class NodeTask
-  RESPONSE_TIMEOUT = 5
+  RESPONSE_TIMEOUT = 20
   START_MAX_RETRIES = 1
 
   class << self
@@ -28,6 +28,14 @@ class NodeTask
       @working_dir || Dir.pwd
     end
 
+    def error_log_file
+      File.join(working_dir, "#{daemon_identifier}-error.log")
+    end
+
+    def pid_file
+      File.join(working_dir, "#{daemon_identifier}.pid")
+    end
+
     def gem_dir
       @gem_dir ||= File.dirname(File.expand_path(__FILE__))
     end
@@ -41,7 +49,7 @@ class NodeTask
     end
 
     def node_command
-      @node_command || ENV["NODE_COMMAND"] || 'node --debug'
+      @node_command || ENV["NODE_COMMAND"] ||  ENV["NODE_TASK_DEBUG"] ? 'node --debug' : 'node'
     end
 
     def daemon_start_script
@@ -63,7 +71,8 @@ class NodeTask
     end
 
     # really try to successfully connect, starting the daemon if required
-    def ensure_connection(attempt = 0)
+    def ensure_connection()
+      attempt = 0
       begin
         server # make sure daemon is running
 
@@ -77,9 +86,10 @@ class NodeTask
         end
       rescue DaemonController::StartTimeout, DaemonController::StartError => e
         logger.error e.message
-        logger.error "retrying attempt #{attempt+1}"
         if attempt < START_MAX_RETRIES
-          socket = ensure_connection(attempt+1)
+          attempt += 1
+          logger.error "retrying attempt #{attempt}"
+          retry
         else
           raise e
         end
@@ -88,12 +98,30 @@ class NodeTask
       socket
     end
 
+    def check_error
+      if File.exist? error_log_file
+        # TODO: raise error
+        logger.error File.open(error_log_file).read
+        File.unlink error_log_file
+        true
+      end
+    end
+
     # get a json response from socket
     def parse_response(socket)
       # only take one message - the result
       # response terminated by newline
-      socket.each do |line|
-        return JSON.parse(line, symbolize_names: true)
+      response_text = nil
+      loop do
+        response_text = socket.gets("\n")
+        break if response_text
+        break if check_error
+      end
+      if response_text
+        JSON.parse(response_text, symbolize_names: true)
+      else
+        logger.error 'no response for message'
+        nil
       end
     end
 
@@ -128,6 +156,7 @@ class NodeTask
     # stop the daemon if no one else is using it
     def release
       begin
+        # this doesn't really work as intended right now
         return if clients_active > 0
       rescue Errno::ENOENT => e
         # socket file probably doesn't exist
@@ -184,10 +213,10 @@ class NodeTask
             raise Errno::ECONNREFUSED, e.message
           end
         },
-        pid_file: File.join(working_dir, "#{daemon_identifier}.pid"),
-        log_file: File.join(working_dir, "#{daemon_identifier}-error.log"),
+        pid_file: pid_file,
+        log_file: error_log_file,
         env: {
-          "NODE_SOCK_PATH" => socket_path,
+          "NODE_TASK_SOCK_PATH" => socket_path,
           "NODE_TASK_CWD" => working_dir,
           "NODE_TASK_DAEMON_ID" => daemon_identifier,
         },
@@ -216,6 +245,6 @@ class NodeTask
     }
 
     response = self.class.request(socket, message)
-    response[:result]
+    response[:result] if response
   end
 end
