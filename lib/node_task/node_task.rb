@@ -231,6 +231,7 @@ class NodeTask
           "NODE_TASK_SOCK_PATH" => socket_path,
           "NODE_TASK_CWD" => working_dir,
           "NODE_TASK_DAEMON_ID" => daemon_identifier,
+          "NODE_ENV" => ENV["RACK_ENV"],
         },
         start_timeout: 5,
         daemonize_for_me: true,
