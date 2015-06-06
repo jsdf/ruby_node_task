@@ -9,7 +9,6 @@
   "author": "James Friend <james@jsdf.co> (http://jsdf.co/)",
   "license": "ISC",
   "dependencies": {
-    "daemon": "^1.1.0",
     "ndjson": "^1.3.0",
     "winston": "^1.0.0"
   }
