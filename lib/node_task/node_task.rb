@@ -60,15 +60,24 @@ class NodeTask
     end
 
     def node_command
-      @node_command || ENV["NODE_COMMAND"] ||  ENV["NODE_TASK_DEBUG"] ? 'node --debug' : 'node'
+      @node_command || ENV["NODE_COMMAND"] || ENV["NODE_TASK_DEBUG"] ? 'node --debug' : 'node'
+    end
+
+    def npm_command
+      @npm_command || ENV["NPM_COMMAND"] || 'npm'
     end
 
     def daemon_start_script
       File.join(gem_dir, 'index.js').to_s
     end
 
+    def npm_install
+      system("cd #{gem_dir}; #{npm_command} install")
+    end
+
     # get configured daemon controller for daemon, and start it
     def server
+      npm_install unless Dir.exists? File.join(gem_dir, 'node_modules')
       @controller ||= _make_daemon_controller
 
       begin
