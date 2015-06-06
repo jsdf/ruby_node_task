@@ -9,6 +9,14 @@ class NodeTask
   START_MAX_RETRIES = 1
 
   class Error < StandardError
+    def initialize(js_error)
+      @js_error = js_error
+      super(js_error[:message])
+    end
+
+    def to_s
+      @js_error[:stack] || @js_error[:message]
+    end
   end
 
   class << self
