@@ -1,7 +1,8 @@
 source "https://rubygems.org"
 
-gem "daemon_controller"
+gemspec
 
 group :development, :test do
   gem "rspec"
+  gem "rake"
 end

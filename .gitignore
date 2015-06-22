@@ -36,5 +36,6 @@ nbproject
 # Folders to ignore
 node_modules
 bower_components
+pkg
 
 ruby_node_task.*
