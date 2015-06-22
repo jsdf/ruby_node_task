@@ -1,6 +1,8 @@
+require 'json'
+
 Gem::Specification.new do |s|
   s.name        = 'node_task'
-  s.version     = '0.1.0'
+  s.version     = JSON.load(File.new('./lib/node_task/package.json'))['version']
   s.licenses    = ['MIT']
   s.summary     = "This is an node_task!"
   s.description = "Much longer explanation of the node_task!"
