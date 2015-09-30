@@ -5,7 +5,7 @@ require 'timeout'
 require 'logger'
 
 class NodeTask
-  RESPONSE_TIMEOUT = 20
+  RESPONSE_TIMEOUT = 9999
   START_MAX_RETRIES = 1
 
   class Error < StandardError
@@ -60,24 +60,15 @@ class NodeTask
     end
 
     def node_command
-      @node_command || ENV["NODE_COMMAND"] || ENV["NODE_TASK_DEBUG"] ? 'node --debug' : 'node'
-    end
-
-    def npm_command
-      @npm_command || ENV["NPM_COMMAND"] || 'npm'
+      @node_command || ENV["NODE_COMMAND"] || 'node'
     end
 
     def daemon_start_script
       File.join(gem_dir, 'index.js').to_s
     end
 
-    def npm_install
-      system("cd #{gem_dir}; #{npm_command} install")
-    end
-
     # get configured daemon controller for daemon, and start it
     def server
-      npm_install unless Dir.exists? File.join(gem_dir, 'node_modules')
       @controller ||= _make_daemon_controller
 
       begin
@@ -222,6 +213,7 @@ class NodeTask
     def _make_daemon_controller
       logger.debug "socket_path #{socket_path}"
 
+      puts "starting #{node_command} #{daemon_start_script}"
       controller = DaemonController.new(
         identifier: daemon_identifier,
         start_command: "#{node_command} #{daemon_start_script}",
@@ -242,7 +234,8 @@ class NodeTask
           "NODE_TASK_DAEMON_ID" => daemon_identifier,
           "NODE_ENV" => ENV["RACK_ENV"],
         },
-        start_timeout: 5,
+        log_file_activity_timeout: RESPONSE_TIMEOUT,
+        start_timeout: RESPONSE_TIMEOUT,
         daemonize_for_me: true,
       )
 
