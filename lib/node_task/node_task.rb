@@ -9,13 +9,18 @@ class NodeTask
   START_MAX_RETRIES = 1
 
   class Error < StandardError
-    def initialize(js_error)
-      @js_error = js_error
+    attr_accessor :js_error
+
+    def initialize(original_js_error)
+      js_error = original_js_error
+
       super(js_error[:message])
     end
 
     def to_s
-      @js_error[:stack] || @js_error[:message]
+      super unless js_error
+
+      js_error[:stack] || js_error[:message]
     end
   end
 
@@ -64,7 +69,7 @@ class NodeTask
     end
 
     def daemon_start_script
-      File.join(gem_dir, 'index.js').to_s
+      File.join(gem_dir, 'nodeTask.js').to_s
     end
 
     # get configured daemon controller for daemon, and start it
@@ -155,36 +160,30 @@ class NodeTask
       result
     end
 
-    # number of connections active to the daemon
-    def clients_active
-      socket = _make_connection # might fail
-      message = {status: true} # special message type
-      result = request(socket, message)
-      return 0 if result.nil?
-      result[:clients]
+    def alive?
+      current_pid = nil
+      alive = false
+      if @controller
+        begin
+          current_pid = @controller.pid
+        rescue Errno::ENOENT
+        end
+      end
+      if current_pid
+        begin
+          Process.getpgid(current_pid)
+          alive = true
+        rescue Errno::ESRCH
+        end
+      end
+      alive
     end
 
-    # stop the daemon if no one else is using it
+    # stop the daemon
     def release
-      begin
-        # this doesn't really work as intended right now
-        # as no connections are maintained when tasks aren't running
-        return if clients_active > 0
-      rescue Errno::ENOENT => e
-        # socket file probably doesn't exist
-        # maybe we should just return here?
-      end
+      return unless alive?
 
-      pid = nil
-      begin
-        pid = @controller.pid
-      rescue Errno::ENOENT => e
-        # presumably no pid file exists and the daemon is not running
-        logger.debug "daemon already stopped"
-        return
-      end
-
-      logger.debug "stopping daemon #{pid}"
+      logger.debug "stopping daemon #{@controller.pid}"
       @controller.stop
 
       begin
@@ -192,6 +191,21 @@ class NodeTask
       rescue Errno::ENOENT => e
         # socket file's already gone
       end
+    end
+
+    def daemon_env
+      {
+        "NODE_TASK_SOCK_PATH" => socket_path,
+        "NODE_TASK_CWD" => working_dir,
+        "NODE_TASK_DAEMON_ID" => daemon_identifier,
+        "NODE_TASK_PARENT_PID" => Process.pid.to_s,
+        "NODE_TASK_PARENT_CHECK_INTERVAL" => parent_check_interval.to_s,
+        "NODE_ENV" => ENV["RACK_ENV"],
+      }
+    end
+
+    def parent_check_interval
+      1000
     end
 
     private
@@ -212,12 +226,11 @@ class NodeTask
     # - some server errors not reported
     def _make_daemon_controller
       logger.debug "socket_path #{socket_path}"
+      logger.debug "starting #{node_command} #{daemon_start_script}"
 
-      puts "starting #{node_command} #{daemon_start_script}"
       controller = DaemonController.new(
         identifier: daemon_identifier,
         start_command: "#{node_command} #{daemon_start_script}",
-        # ping_command: [:unix, socket_path],
         ping_command: Proc.new{
           begin
             _make_connection
@@ -228,18 +241,11 @@ class NodeTask
         },
         pid_file: pid_file,
         log_file: error_log_file,
-        env: {
-          "NODE_TASK_SOCK_PATH" => socket_path,
-          "NODE_TASK_CWD" => working_dir,
-          "NODE_TASK_DAEMON_ID" => daemon_identifier,
-          "NODE_ENV" => ENV["RACK_ENV"],
-        },
+        env: daemon_env,
         log_file_activity_timeout: RESPONSE_TIMEOUT,
         start_timeout: RESPONSE_TIMEOUT,
         daemonize_for_me: true,
       )
-
-      at_exit { release }
 
       controller
     end
