@@ -12,15 +12,15 @@ class NodeTask
     attr_accessor :js_error
 
     def initialize(original_js_error)
-      js_error = original_js_error
+      @js_error = original_js_error
 
-      super(js_error ? js_error[:message] : nil)
+      super(@js_error ? @js_error[:message] : nil)
     end
 
     def to_s
-      return super unless js_error
+      return super unless @js_error
 
-      js_error[:stack] || js_error[:message]
+      @js_error[:stack] || @js_error[:message]
     end
   end
 
