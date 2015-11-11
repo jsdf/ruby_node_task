@@ -18,7 +18,7 @@ class NodeTask
     end
 
     def to_s
-      super unless js_error
+      return super unless js_error
 
       js_error[:stack] || js_error[:message]
     end
