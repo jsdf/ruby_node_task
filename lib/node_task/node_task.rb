@@ -14,7 +14,7 @@ class NodeTask
     def initialize(original_js_error)
       js_error = original_js_error
 
-      super(js_error[:message])
+      super(js_error ? js_error[:message] : nil)
     end
 
     def to_s
